@@ -52,6 +52,17 @@ extension ViewController: UICollectionViewDelegate {
 }
 
 extension ViewController: StackViewDelegateLayout {
+    
+    func collectionView(_ collection: UICollectionView, shouldPopFor layout: StackViewLayout) -> Bool {
+        guard let topIndex = layout.topIndexPath else { return false }
+        guard let attr = layout.layoutAttributesForItem(at: topIndex) as? StackViewLayoutAttributes else { return false }
+        let result = attr.angle >= CGFloat.pi / 6.0 || attr.angle <= -CGFloat.pi / 6.0
+        if result {
+            cardCollection.removeFirst()
+        }
+        return result
+    }
+    
     func collectionView(_ collection: UICollectionView, layout: StackViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
         let width = view.bounds.width * 2 / 3
         let height = (3.0 / 2.0) * width
