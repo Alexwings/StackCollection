@@ -15,7 +15,9 @@ protocol StackViewDelegateLayout: UICollectionViewDelegate {
 class StackViewLayout: UICollectionViewLayout {
     
     var itemSize: CGSize = .zero
-    
+    var topIndexPath: IndexPath? {
+        return attributeArray.first?.indexPath
+    }
     private var collection: UICollectionView {
         guard let col = collectionView else {
             fatalError("\(String(describing: self)) must attach to a collectionView")
@@ -23,7 +25,6 @@ class StackViewLayout: UICollectionViewLayout {
         return col
     }
     private var attributeArray: [UICollectionViewLayoutAttributes] = []
-    
     override var collectionViewContentSize: CGSize {
         return collection.bounds.size
     }
@@ -38,8 +39,8 @@ class StackViewLayout: UICollectionViewLayout {
             let attrs = UICollectionViewLayoutAttributes(forCellWith: index)
             attrs.size = delegate.collectionView(collection, layout: self, sizeForItemAt: index)
             attrs.center = center
-            attrs.transform = CGAffineTransform.identity.translatedBy(x: CGFloat(item * 2), y: 0)
             attrs.zIndex = collection.numberOfItems(inSection: 0) - item - 1
+            attrs.alpha = item == 0 ? 1 : 0
             return attrs
         })
     }
@@ -53,9 +54,43 @@ class StackViewLayout: UICollectionViewLayout {
         return attributeArray[index]
     }
     
-    override func layoutAttributesForInteractivelyMovingItem(at indexPath: IndexPath, withTargetPosition position: CGPoint) -> UICollectionViewLayoutAttributes {
-        guard let attr = self.layoutAttributesForItem(at: indexPath) else { fatalError("Moving unexist item")}
-        attr.center.x = position.x
-        return attr
+    func applyUpdate(for vector: CGPoint, at index: IndexPath) {
+        guard let attr = self.layoutAttributesForItem(at: index) else { fatalError("Moving unexist item")}
+        let original = CGAffineTransform.identity
+        let translatedTransform = original.translatedBy(x: vector.x, y: 0)
+        let angle = atan(vector.x * 2.0 / collection.bounds.height).truncatingRemainder(dividingBy: CGFloat.pi)
+        let rotateTransform = original.rotated(by: angle)
+        attr.transform = translatedTransform.concatenating(rotateTransform)
+        if let secondIndex = attributeArray.index(where:{$0.indexPath.item == index.item + 1}) {
+            let secAttr = attributeArray[secondIndex]
+            secAttr.alpha = fabs(angle) * 4.0 / CGFloat.pi
+        }
+        invalidateLayout()
+    }
+    
+    func removeUpdate() {
+        for attr in attributeArray {
+            attr.transform = CGAffineTransform.identity
+        }
+        invalidateLayout()
+    }
+}
+
+extension UICollectionView {
+    @objc func handlePan(_ guesture: UIPanGestureRecognizer) {
+        guard let layout = self.collectionViewLayout as? StackViewLayout, let topIndex = layout.topIndexPath else { return }
+        guard let cell = cellForItem(at: topIndex) else { return }
+        let pos = guesture.location(in: cell)
+        guard pos.x >= 0 && pos.x <= cell.bounds.height && pos.y >= 0 && pos.y <= cell.bounds.height else { return }
+        switch guesture.state {
+        case .began, .changed:
+            layout.applyUpdate(for: guesture.translation(in: self), at:topIndex)
+            break
+        case .cancelled, .ended, .failed:
+            layout.removeUpdate()
+            break
+        default:
+            break
+        }
     }
 }

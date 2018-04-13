@@ -23,24 +23,15 @@ class ViewController: UIViewController {
         super.viewDidLoad()
         view.addSubview(collectionView)
         collectionView.attachEdgeTo(top: (view.safeAreaLayoutGuide.topAnchor, 0), bottom: (view.safeAreaLayoutGuide.bottomAnchor, 0), leading: (view.safeAreaLayoutGuide.leadingAnchor, 0), trailing: (view.safeAreaLayoutGuide.trailingAnchor, 0))
+        collectionView.backgroundColor = .white
         collectionView.register(UICollectionViewCell.self, forCellWithReuseIdentifier: cellID)
         collectionView.dataSource = self
         collectionView.delegate = self
-        let pan = UIPanGestureRecognizer(target: self, action: #selector(handlePanGuesture(_:)))
+        let pan = UIPanGestureRecognizer(target: collectionView, action: #selector(collectionView.handlePan(_:)))
+        pan.maximumNumberOfTouches = 1
+        pan.minimumNumberOfTouches = 1
         collectionView.addGestureRecognizer(pan)
     }
-    
-    @objc func handlePanGuesture(_ pan: UIPanGestureRecognizer) {
-        let position = pan.location(in: collectionView)
-        guard let index = collectionView.indexPathForItem(at: position) else { return }
-        switch pan.state {
-        case .began, .changed:
-            
-        default:
-            <#code#>
-        }
-    }
-    
 }
 
 extension ViewController: UICollectionViewDataSource {
