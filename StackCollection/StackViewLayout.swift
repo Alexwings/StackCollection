@@ -37,8 +37,17 @@ class StackViewLayout: UICollectionViewLayout {
         }
         return col
     }
+    private let arrayManipulationLock: DispatchSemaphore = DispatchSemaphore(value: 1)
+    private var attributeArray: [StackViewLayoutAttributes] = [] {
+        willSet {
+            arrayManipulationLock.wait()
+        }
+        didSet {
+            arrayManipulationLock.signal()
+        }
+    }
     
-    private var attributeArray: [StackViewLayoutAttributes] = []
+    private var deletedAttribute: [StackViewLayoutAttributes] = []
     
     override var collectionViewContentSize: CGSize {
         return collection.bounds.size
@@ -49,19 +58,29 @@ class StackViewLayout: UICollectionViewLayout {
     }
     
     override func prepare() {
-        guard let delegate = collection.delegate as? StackViewDelegateLayout else { return }
-        guard attributeArray.isEmpty || collection.numberOfItems(inSection: 0) != attributeArray.count else { return }
-        let visiableRect = CGRect(origin: collection.contentOffset, size: collection.bounds.size)
-        let center = CGPoint(x: visiableRect.midX, y: visiableRect.midY)
-        attributeArray = [Int](0..<collection.numberOfItems(inSection: 0)).map({ (item) -> StackViewLayoutAttributes in
-            let index = IndexPath(item: item, section: 0)
-            let attrs = StackViewLayoutAttributes(forCellWith: index)
-            attrs.size = delegate.collectionView(collection, layout: self, sizeForItemAt: index)
-            attrs.center = center
-            attrs.zIndex = collection.numberOfItems(inSection: 0) - item - 1
-            attrs.alpha = item == 0 ? 1 : 0
-            return attrs
-        })
+        let numberOfItems = collection.numberOfItems(inSection: 0)
+        if attributeArray.isEmpty {
+            attributeArray = newLayoutAttributes(for: 0..<numberOfItems)
+            return
+        }
+        
+        if attributeArray.count > numberOfItems {
+            let dist = attributeArray.count - numberOfItems
+            for _ in 0..<dist {
+                if let first = attributeArray.popFirst() {
+                    deletedAttribute.append(first)
+                }
+            }
+            for attrs in attributeArray {
+                attrs.indexPath.item -= dist
+            }
+        }
+        
+        if attributeArray.count < numberOfItems {
+            let newAttributes = newLayoutAttributes(for: attributeArray.count..<numberOfItems)
+            attributeArray += newAttributes
+        }
+        
     }
     
     override func layoutAttributesForElements(in rect: CGRect) -> [UICollectionViewLayoutAttributes]? {
@@ -72,12 +91,32 @@ class StackViewLayout: UICollectionViewLayout {
         guard let index = attributeArray.index(where: {$0.indexPath == indexPath}) else { return nil }
         return attributeArray[index]
     }
-    
+    //Pop and return final layout attributes for the removed item at itemIndexPath from attributeArray
     override func finalLayoutAttributesForDisappearingItem(at itemIndexPath: IndexPath) -> UICollectionViewLayoutAttributes? {
-        guard let attrs = layoutAttributesForItem(at: itemIndexPath)?.copy() as? StackViewLayoutAttributes else { return nil }
-        attrs.translation = CGPoint(x: attrs.translation.x + 100, y: attrs.translation.y)
-        attrs.angle = attrs.angle > 0 ? CGFloat.pi / 2.0 : -CGFloat.pi / 2.0
+        guard let index = deletedAttribute.index(where: {$0.indexPath.item == itemIndexPath.item}) else { return nil }
+        let attrs = deletedAttribute[index]
+        let dist = (attrs.angle >= 0 ? collection.center.x : -collection.center.x) + sin(attrs.angle) * (attrs.size.height / 2.0)
+        let center = CGPoint(x: collection.center.x + dist, y: attrs.center.y)
+        attrs.center = center
+        if let index = attributeArray.index(of: attrs) {
+            attributeArray.remove(at: index)
+        }
         return attrs
+    }
+    
+    private func newLayoutAttributes<S> (for sequence: S) -> [StackViewLayoutAttributes]  where S : Sequence, S.Element == Int {
+        guard let delegate = collection.delegate as? StackViewDelegateLayout else { return [] }
+        let visiableRect = CGRect(origin: collection.contentOffset, size: collection.bounds.size)
+        let center = CGPoint(x: visiableRect.midX, y: visiableRect.midY)
+        return [Int](sequence).map({ (item) -> StackViewLayoutAttributes in
+            let index = IndexPath(item: item, section: 0)
+            let attrs = StackViewLayoutAttributes(forCellWith: index)
+            attrs.size = delegate.collectionView(collection, layout: self, sizeForItemAt: index)
+            attrs.center = center
+            attrs.zIndex = collection.numberOfItems(inSection: 0) - item - 1
+            attrs.alpha = item == 0 ? 1 : 0
+            return attrs
+        })
     }
 }
 
@@ -94,9 +133,10 @@ extension StackViewLayout {
         invalidateLayout()
     }
     
-    func removeUpdate() {
+    func clearAttributes() {
         for attr in attributeArray {
             attr.transform = CGAffineTransform.identity
+            attr.alpha = 1
         }
         invalidateLayout()
     }
@@ -114,18 +154,23 @@ extension UICollectionView {
             break
         case .cancelled, .ended, .failed:
             if let del = delegate as? StackViewDelegateLayout, del.collectionView(self, shouldPopFor: layout) {
-                performBatchUpdates({
-                    self.deleteItems(at: [topIndex])
-                }, completion: { (finished) in
-                    guard finished else { return }
-                    self.reloadData()
-                })
+                deleteItems(at: [topIndex])
             }else {
-                layout.removeUpdate()
+                layout.clearAttributes()
             }
             break
         default:
             break
         }
+    }
+}
+
+extension Array where Element : StackViewLayoutAttributes {
+    
+    mutating func popFirst() -> Element? {
+        guard !self.isEmpty else { return nil }
+        guard let first = self.first else { return nil }
+        self.removeFirst()
+        return first
     }
 }
