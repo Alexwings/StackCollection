@@ -8,7 +8,7 @@
 
 import UIKit
 
-class ViewController: UIViewController {
+class StackViewController: UIViewController {
     
     let collectionView: UICollectionView = {
         let layout = StackViewLayout()
@@ -34,7 +34,7 @@ class ViewController: UIViewController {
     }
 }
 
-extension ViewController: UICollectionViewDataSource {
+extension StackViewController: UICollectionViewDataSource {
     
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
         return cardCollection.count
@@ -47,11 +47,11 @@ extension ViewController: UICollectionViewDataSource {
     }
 }
 
-extension ViewController: UICollectionViewDelegate {
+extension StackViewController: UICollectionViewDelegate {
     
 }
 
-extension ViewController: StackViewDelegateLayout {
+extension StackViewController: StackViewDelegateLayout {
     
     func collectionView(_ collection: UICollectionView, shouldPopFor layout: StackViewLayout) -> Bool {
         guard let topIndex = layout.topIndexPath else { return false }
