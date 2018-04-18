@@ -73,6 +73,9 @@ class StackViewLayout: UICollectionViewLayout {
             }
             for attrs in attributeArray {
                 attrs.indexPath.item -= dist
+                attrs.alpha = 1
+                attrs.angle = 0
+                attrs.translation = CGPoint.zero
             }
         }
         
@@ -98,9 +101,7 @@ class StackViewLayout: UICollectionViewLayout {
         let dist = (attrs.angle >= 0 ? collection.center.x : -collection.center.x) + sin(attrs.angle) * (attrs.size.height / 2.0)
         let center = CGPoint(x: collection.center.x + dist, y: attrs.center.y)
         attrs.center = center
-        if let index = attributeArray.index(of: attrs) {
-            attributeArray.remove(at: index)
-        }
+        deletedAttribute.remove(at: index)
         return attrs
     }
     
